@@ -6,6 +6,10 @@ ABS_DEV_BIN := $(MAKEFILE_DIR)/$(DEV_BIN)
 build:
 	go build -o hatsukari ./...
 
+.PHONY: test
+test:
+	go test ./...
+
 .PHONY: fmt
 fmt: $(DEV_BIN)/golangci-lint
 	$(DEV_BIN)/golangci-lint run --fix --config=.golangci.yml

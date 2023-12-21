@@ -125,6 +125,10 @@ linters:
     - scopelint
     - structcheck
     - varcheck
+    # gomnd is disabled. 流石に厳しすぎる。
+    - gomnd
+    - depguard
+    - varnamelen
 
 
   # Enable presets.
