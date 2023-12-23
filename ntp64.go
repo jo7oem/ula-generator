@@ -1,4 +1,4 @@
-package ulagenerator
+package main
 
 import (
 	"encoding/binary"

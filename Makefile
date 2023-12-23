@@ -11,7 +11,8 @@ test:
 	go test ./...
 
 .PHONY: fmt
-fmt: $(DEV_BIN)/golangci-lint
+fmt: $(DEV_BIN)/golangci-lint  $(DEV_BIN)/wsl
+	$(DEV_BIN)/wsl --fix ./... >/dev/null 2>&1 || true
 	$(DEV_BIN)/golangci-lint run --fix --config=.golangci.yml
 
 .PHONY: lint
@@ -24,6 +25,11 @@ setup: $(DEV_BIN)/golangci-lint
 $(DEV_BIN)/golangci-lint:
 	mkdir -p $(@D)
 	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(@D) v1.55.2
+
+
+$(DEV_BIN)/wsl:
+	mkdir -p $(@D)
+	GOBIN=$(ABS_DEV_BIN) go install github.com/bombsimon/wsl/v4/cmd...@master
 
 .PHONY: clean
 clean:

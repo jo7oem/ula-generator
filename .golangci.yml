@@ -129,6 +129,7 @@ linters:
     - gomnd
     - depguard
     - varnamelen
+    - forbidigo # CLIツールなため
 
 
   # Enable presets.
