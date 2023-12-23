@@ -64,10 +64,10 @@ type NICScore struct {
 	NIC   *net.Interface
 }
 
-func selectInterface(NICs []net.Interface) *NICScore {
-	filtered := make([]*NICScore, 0, len(NICs))
+func selectInterface(nics []net.Interface) *NICScore {
+	filtered := make([]*NICScore, 0, len(nics))
 
-	for _, nic := range NICs {
+	for _, nic := range nics {
 		nic := nic
 
 		nd, err := genNICDetail(&nic)
