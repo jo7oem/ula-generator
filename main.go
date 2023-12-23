@@ -1,20 +1,19 @@
 package main
 
 import (
-	"cmp"
+	// sha1 is used to generate ULA prefix RFC4193 3.2.2 4).
+	"crypto/sha1" //nolint:gosec
+	"errors"
 	"fmt"
 	"net"
-	"slices"
+	"time"
 )
 
 const (
-	hasMACAddrFlag       = 0x01
-	hasLinkLocalAddrFlag = 0x02
-	hasULAFlag           = 0x04
-	hasGlobalAddrFlag    = 0x08
-
 	ULAPrefix = 0xfc // RFC4193 3.1
 )
+
+var ErrUnknown = errors.New("unknown error")
 
 func main() {
 	// NICのIPv6アドレスを取得する
@@ -28,108 +27,37 @@ func main() {
 		panic("no interface")
 	}
 
-	//        algorithm.  If an EUI-64 does not exist, one can be created from
-	//        a 48-bit MAC address as specified in [ADDARCH].  If an EUI-64
-	//        cannot be obtained or created, a suitably unique identifier,
-	//        local to the node, should be used (e.g., system serial number).
-	fmt.Printf("NIC: %s\n", nd.NIC.Name)
-}
-
-func ToIPv6Addr(adr net.Addr) (net.IP, bool) {
-	ip, ok := adr.(*net.IPNet)
-	if !ok {
-		return nil, false
-	}
-
-	v4 := ip.IP.To4()
-	v6 := ip.IP.To16()
-
-	if v4 != nil || v6 == nil {
-		return nil, false
-	}
-
-	return v6, true
-}
-
-func isULA(ip net.IP) bool {
-	if len(ip) != 16 {
-		return false
-	}
-
-	return ip[0]&0xE == ULAPrefix
-}
-
-type NICScore struct {
-	Flags uint8
-	NIC   *net.Interface
-}
-
-func selectInterface(nics []net.Interface) *NICScore {
-	filtered := make([]*NICScore, 0, len(nics))
-
-	for _, nic := range nics {
-		nic := nic
-
-		nd, err := genNICDetail(&nic)
-		if err != nil || nd == nil {
-			continue
-		}
-
-		filtered = append(filtered, nd)
-	}
-
-	slices.SortStableFunc(filtered, func(i, j *NICScore) int {
-		// 優先度の高いNICが先頭にきてほしい
-		return cmp.Compare(j.Flags, i.Flags)
-	})
-
-	if filtered[0].Flags == 0 {
-		return nil
-	}
-
-	return filtered[0]
-}
-
-func genNICDetail(nic *net.Interface) (*NICScore, error) {
-	adders, err := nic.Addrs()
+	eui64, err := nd.EUI64()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get %s addresses: %w", nic.Name, err)
+		panic(err)
 	}
 
-	nd := NICScore{
-		Flags: 0,
-		NIC:   nic,
-	}
+	// 現在の時刻よりNTP Timestamp Formatのバイト列を作成する
+	ntp64 := Time2Ntp64(time.Now())
 
-	if nic.HardwareAddr != nil {
-		nd.Flags |= hasMACAddrFlag
-	}
+	ula := genULAAddress(ntp64.Bytes(), eui64)
 
-	for _, addr := range adders {
-		ip, ok := ToIPv6Addr(addr)
-		if !ok {
-			continue
-		}
+	fmt.Printf("%s/56\n", ula.String())
+}
 
-		if isULA(ip) {
-			nd.Flags |= hasULAFlag
+func genULAAddress(ntp64 []byte, eui64 []byte) net.IP {
+	// NAT64とEUI-64を組み合わせてSHA1を計算する
+	tmp := make([]byte, 16)
+	copy(tmp, eui64)
+	copy(tmp[8:], ntp64)
 
-			// ULAとグローバルアドレスは区別する
-			continue
-		}
+	dig := sha1.Sum(tmp) //nolint:gosec
 
-		if ip.IsGlobalUnicast() {
-			nd.Flags |= hasGlobalAddrFlag
+	// そのSHA1の下位40bitを取り出す
+	// これがULAのプレフィックスになる
+	ulaPrefix := dig[12:]
 
-			continue
-		}
+	// このULAプレフィックスを使って、ULAを生成する
+	ula := make([]byte, 16)
+	ula[0] = ULAPrefix + 1 // global flag 0の場合は現在未定義
+	copy(ula[1:], ulaPrefix)
 
-		if ip.IsLinkLocalUnicast() {
-			nd.Flags |= hasLinkLocalAddrFlag
+	ip := net.IP(ula)
 
-			continue
-		}
-	}
-
-	return &nd, nil
+	return ip
 }
